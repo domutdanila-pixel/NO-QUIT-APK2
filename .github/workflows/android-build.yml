@@ -1,12 +1,9 @@
-
-name: Build NO QUIT 3.0 APK
+name: Build NO QUIT APK
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
   build:
@@ -16,28 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Find Android project
-        id: project
-        shell: bash
-        run: |
-          echo "Searching for Android project..."
-
-          GRADLE_FILE=$(find . -type f \( -name "gradlew" -o -name "gradlew.bat" \) \
-            -not -path "*/.gradle/*" | head -n 1)
-
-          if [ -z "$GRADLE_FILE" ]; then
-            echo "ERROR: Gradle wrapper not found"
-            find . -maxdepth 5 -type f | head -n 100
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLE_FILE")
-          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
-          echo "Found project: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR"
-
-      - name: Set up JDK 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,17 +22,24 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission
-        run: chmod +x "${{ steps.project.outputs.project_dir }}/gradlew"
+      - name: Extract project ZIP
+        run: |
+          unzip -q NO_QUIT_3.0_GITHUB_UPLOAD.zip -d project
+          echo "Project files:"
+          find project -maxdepth 3 -type f | head -60
+          test -f project/android/settings.gradle
 
-      - name: Build debug APK
-        working-directory: ${{ steps.project.outputs.project_dir }}
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        run: gradle -p project/android assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NO-QUIT-3.0-debug-apk
-          path: |
-            **/build/outputs/apk/debug/*.apk
+          name: NO-QUIT-3.0-APK
+          path: project/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
